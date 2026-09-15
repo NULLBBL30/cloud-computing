@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.13' }
       - run: pip install -r requirements.txt && pytest -q
-      - run: mkdir -p dist/package && pip install -r requirements.txt --target dist/package && cp -r app worker dist/package/
+      - run: mkdir -p dist/package && pip install -r requirements-fc.txt --target dist/package && cp -r app worker dist/package/
       - uses: hashicorp/setup-terraform@v3
       - run: |
           terraform -chdir=infra init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=terraform/inventory-platform.tfstate" -backend-config="encrypt=true"
