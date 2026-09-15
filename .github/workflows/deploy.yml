@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ALICLOUD_REGION: cn-hangzhou
+      PYTHONPATH: ${{ github.workspace }}
       ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
       ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
       TF_VAR_tenant_keys_json: ${{ secrets.TENANT_KEYS_JSON }}
