@@ -134,6 +134,7 @@ resource "alicloud_fc_trigger" "worker_mns" {
   function = alicloud_fc_function.worker.name
   name = "mns-topic"
   type = "mns_topic"
+  role = alicloud_ram_role.fc.arn
   source_arn = "acs:mns:${var.region}:${data.alicloud_account.current.id}:/topics/${alicloud_mns_topic.events.name}"
   config_mns = jsonencode({ notifyContentFormat = "JSON", notifyStrategy = "BACKOFF_RETRY" })
 }
