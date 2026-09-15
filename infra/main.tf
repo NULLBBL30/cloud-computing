@@ -28,6 +28,8 @@ variable "runtime_access_secret" {
 }
 provider "alicloud" { region = var.region }
 
+data "alicloud_account" "current" {}
+
 data "archive_file" "platform" {
   type = "zip"
   source_dir = "${path.module}/../dist/package"
@@ -132,7 +134,7 @@ resource "alicloud_fc_trigger" "worker_mns" {
   function = alicloud_fc_function.worker.name
   name = "mns-topic"
   type = "mns_topic"
-  source_arn = alicloud_mns_topic.events.id
+  source_arn = "acs:mns:${var.region}:${data.alicloud_account.current.id}:/topics/${alicloud_mns_topic.events.name}"
   config_mns = jsonencode({ notifyContentFormat = "JSON", notifyStrategy = "BACKOFF_RETRY" })
 }
 
