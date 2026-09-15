@@ -5,11 +5,26 @@ terraform {
   }
 }
 
-variable "region" { type = string, default = "cn-hangzhou" }
-variable "project_name" { type = string, default = "inventory-platform" }
-variable "tenant_keys_json" { type = string, sensitive = true }
-variable "runtime_access_key" { type = string, sensitive = true }
-variable "runtime_access_secret" { type = string, sensitive = true }
+variable "region" {
+  type = string
+  default = "cn-hangzhou"
+}
+variable "project_name" {
+  type = string
+  default = "inventory-platform"
+}
+variable "tenant_keys_json" {
+  type = string
+  sensitive = true
+}
+variable "runtime_access_key" {
+  type = string
+  sensitive = true
+}
+variable "runtime_access_secret" {
+  type = string
+  sensitive = true
+}
 provider "alicloud" { region = var.region }
 
 data "archive_file" "platform" {
