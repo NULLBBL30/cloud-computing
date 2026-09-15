@@ -34,7 +34,8 @@ data "archive_file" "platform" {
 }
 
 resource "alicloud_ots_instance" "inventory" {
-  name = "${var.project_name}-ots"
+  # Tablestore instance names are limited to 16 bytes.
+  name = "invplatots"
   description = "Multi tenant inventory platform"
   accessed_by = "Any"
 }
