@@ -27,7 +27,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - run: |
           terraform -chdir=infra init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=terraform/inventory-platform.tfstate" -backend-config="encrypt=true"
-          terraform -chdir=infra import alicloud_ots_instance.inventory invplatots || true
-          terraform -chdir=infra import alicloud_mns_topic.events inventory-platform-events || true
-          terraform -chdir=infra import alicloud_ram_role.fc inventory-platform-fc-role || true
+          terraform -chdir=infra state show alicloud_ots_instance.inventory >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ots_instance.inventory invplatots
+          terraform -chdir=infra state show alicloud_mns_topic.events >/dev/null 2>&1 || terraform -chdir=infra import alicloud_mns_topic.events inventory-platform-events
+          terraform -chdir=infra state show alicloud_ram_role.fc >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role.fc inventory-platform-fc-role
           terraform -chdir=infra apply -auto-approve
