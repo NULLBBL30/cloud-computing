@@ -33,16 +33,30 @@ data "archive_file" "platform" {
   output_path = "${path.module}/../dist/alicloud-platform.zip"
 }
 
-resource "alicloud_ots_instance" "inventory" { name = "${var.project_name}-ots" description = "Multi tenant inventory platform" accessed_by = "Any" }
+resource "alicloud_ots_instance" "inventory" {
+  name = "${var.project_name}-ots"
+  description = "Multi tenant inventory platform"
+  accessed_by = "Any"
+}
 resource "alicloud_ots_table" "inventory" {
   instance_name = alicloud_ots_instance.inventory.name
   table_name = "inventory"
   time_to_live = -1
   max_version = 1
-  primary_key { name = "PK" type = "String" }
-  primary_key { name = "SK" type = "String" }
+  primary_key {
+    name = "PK"
+    type = "String"
+  }
+  primary_key {
+    name = "SK"
+    type = "String"
+  }
 }
-resource "alicloud_mns_topic" "events" { name = "${var.project_name}-events" maximum_message_size = 65536 logging_enabled = true }
+resource "alicloud_mns_topic" "events" {
+  name = "${var.project_name}-events"
+  maximum_message_size = 65536
+  logging_enabled = true
+}
 
 resource "alicloud_ram_role" "fc" {
   name = "${var.project_name}-fc-role"
@@ -50,9 +64,21 @@ resource "alicloud_ram_role" "fc" {
   description = "Runtime role for inventory platform FC functions"
   force = true
 }
-resource "alicloud_ram_role_policy_attachment" "fc_log" { role_name = alicloud_ram_role.fc.name policy_name = "AliyunLogFullAccess" policy_type = "System" }
-resource "alicloud_ram_role_policy_attachment" "fc_ots" { role_name = alicloud_ram_role.fc.name policy_name = "AliyunOTSFullAccess" policy_type = "System" }
-resource "alicloud_ram_role_policy_attachment" "fc_mns" { role_name = alicloud_ram_role.fc.name policy_name = "AliyunMNSFullAccess" policy_type = "System" }
+resource "alicloud_ram_role_policy_attachment" "fc_log" {
+  role_name = alicloud_ram_role.fc.name
+  policy_name = "AliyunLogFullAccess"
+  policy_type = "System"
+}
+resource "alicloud_ram_role_policy_attachment" "fc_ots" {
+  role_name = alicloud_ram_role.fc.name
+  policy_name = "AliyunOTSFullAccess"
+  policy_type = "System"
+}
+resource "alicloud_ram_role_policy_attachment" "fc_mns" {
+  role_name = alicloud_ram_role.fc.name
+  policy_name = "AliyunMNSFullAccess"
+  policy_type = "System"
+}
 
 locals {
   environment = {
@@ -67,7 +93,11 @@ locals {
   }
 }
 
-resource "alicloud_fc_service" "platform" { name = var.project_name role = alicloud_ram_role.fc.arn description = "Inventory event platform" }
+resource "alicloud_fc_service" "platform" {
+  name = var.project_name
+  role = alicloud_ram_role.fc.arn
+  description = "Inventory event platform"
+}
 resource "alicloud_fc_function" "api" {
   service = alicloud_fc_service.platform.name
   name = "inventory-api"
