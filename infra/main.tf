@@ -1,4 +1,5 @@
 terraform {
+  backend "oss" {}
   required_providers {
     alicloud = { source = "aliyun/alicloud", version = "~> 1.279" }
     archive  = { source = "hashicorp/archive", version = "~> 2.0" }
