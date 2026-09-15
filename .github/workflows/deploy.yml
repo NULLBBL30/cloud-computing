@@ -1,0 +1,26 @@
+name: Build Test and Deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    env:
+      ALICLOUD_REGION: cn-hangzhou
+      ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+      ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+      TF_VAR_tenant_keys_json: ${{ secrets.TENANT_KEYS_JSON }}
+      TF_VAR_runtime_access_key: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+      TF_VAR_runtime_access_secret: ${{ secrets.ALICLOUD_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.13' }
+      - run: pip install -r requirements.txt && pytest -q
+      - run: mkdir -p dist/package && pip install -r requirements.txt --target dist/package && cp -r app worker dist/package/
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=infra init && terraform -chdir=infra apply -auto-approve

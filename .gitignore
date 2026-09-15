@@ -1,0 +1,13 @@
+.venv/
+.idea/
+__pycache__/
+.pytest_cache/
+.env
+*.log
+data/raw/*.csv
+data/raw/*.json
+.terraform/
+*.tfstate
+*.tfstate.*
+dist/
+data/raw/runtime/
