@@ -30,4 +30,8 @@ jobs:
           terraform -chdir=infra state show alicloud_ots_instance.inventory >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ots_instance.inventory invplatots
           terraform -chdir=infra state show alicloud_mns_topic.events >/dev/null 2>&1 || terraform -chdir=infra import alicloud_mns_topic.events inventory-platform-events
           terraform -chdir=infra state show alicloud_ram_role.fc >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role.fc inventory-platform-fc-role
+          terraform -chdir=infra state show alicloud_ram_role_policy_attachment.fc_log >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role_policy_attachment.fc_log role:AliyunLogFullAccess:System:inventory-platform-fc-role
+          terraform -chdir=infra state show alicloud_ram_role_policy_attachment.fc_ots >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role_policy_attachment.fc_ots role:AliyunOTSFullAccess:System:inventory-platform-fc-role
+          terraform -chdir=infra state show alicloud_ram_role_policy_attachment.fc_mns >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role_policy_attachment.fc_mns role:AliyunMNSFullAccess:System:inventory-platform-fc-role
+          terraform -chdir=infra state show alicloud_fc_service.platform >/dev/null 2>&1 || terraform -chdir=infra import alicloud_fc_service.platform inventory-platform
           terraform -chdir=infra apply -auto-approve
