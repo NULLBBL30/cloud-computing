@@ -10,7 +10,7 @@ from typing import Any
 
 from mns.account import Account
 from mns.topic import TopicMessage
-from tablestore import Client, Condition, Row, RowExistenceExpectation
+from tablestore import OTSClient, Condition, Row, RowExistenceExpectation
 
 from app.config import tenant_keys
 from app.models import InventoryEvent
@@ -38,8 +38,8 @@ def _mns_topic():
     return account.get_topic_ref(os.environ["MNS_TOPIC"])
 
 
-def _ots() -> Client:
-    return Client(os.environ["OTS_ENDPOINT"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_ID"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"], os.environ["OTS_INSTANCE"])
+def _ots() -> OTSClient:
+    return OTSClient(os.environ["OTS_ENDPOINT"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_ID"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"], os.environ["OTS_INSTANCE"])
 
 
 def http_handler(event: Any, _context: Any) -> dict[str, Any]:
