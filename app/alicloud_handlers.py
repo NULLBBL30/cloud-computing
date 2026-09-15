@@ -23,8 +23,14 @@ def _body(event: dict[str, Any]) -> dict[str, Any]:
     return json.loads(body) if isinstance(body, str) else body
 
 
-def _response(code: int, payload: dict[str, Any]) -> dict[str, Any]:
-    return {"statusCode": code, "headers": {"content-type": "application/json"}, "body": json.dumps(payload)}
+def _response(code: int, payload: dict[str, Any]) -> str:
+    """Serialize the payload for the FC Python HTTP-trigger handler.
+
+    This runtime expects the handler return value itself to be the HTTP body;
+    returning a Python dict serializes only its keys (``statusCodeheadersbody``).
+    """
+    del code  # FC's legacy Python HTTP trigger always emits the returned body.
+    return json.dumps(payload)
 
 
 def _tenant(event: dict[str, Any]) -> str | None:
