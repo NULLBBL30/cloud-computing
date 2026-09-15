@@ -36,6 +36,11 @@ data "archive_file" "platform" {
   output_path = "${path.module}/../dist/alicloud-platform.zip"
 }
 
+# The FC provider uses CRC64 (not SHA-256) to detect code updates.
+data "alicloud_file_crc64_checksum" "platform" {
+  filename = data.archive_file.platform.output_path
+}
+
 resource "alicloud_ots_instance" "inventory" {
   # Tablestore instance names are limited to 16 bytes.
   name = "invplatots"
@@ -107,6 +112,9 @@ resource "alicloud_fc_function" "api" {
   name = "inventory-api"
   description = "Public inventory API"
   filename = data.archive_file.platform.output_path
+  # The filename is stable across CI runs.  This checksum makes Terraform
+  # upload a new function revision whenever the packaged source changes.
+  code_checksum = data.alicloud_file_crc64_checksum.platform.checksum
   memory_size = "512"
   runtime = "python3.10"
   handler = "app.alicloud_handlers.http_handler"
@@ -117,6 +125,7 @@ resource "alicloud_fc_function" "worker" {
   name = "inventory-worker"
   description = "MNS inventory event worker"
   filename = data.archive_file.platform.output_path
+  code_checksum = data.alicloud_file_crc64_checksum.platform.checksum
   memory_size = "512"
   runtime = "python3.10"
   handler = "app.alicloud_handlers.worker_handler"
