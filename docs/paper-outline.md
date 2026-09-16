@@ -18,15 +18,15 @@ The student must independently read 5-10 peer-reviewed sources and prepare an an
 
 ## Requirements and architecture
 
-Present the six numerical NFRs, a serverless architecture diagram and six ADRs: Lambda versus containers, queued versus synchronous processing, DynamoDB versus relational storage, managed services, single versus multi-region, and identity/secrets. Explain the rejected alternatives and trade-offs.
+Present the six numerical NFRs, a serverless architecture diagram and six ADRs: Function Compute versus containers, synchronous versus queued processing, Tablestore versus relational storage, managed services, single versus multi-region, and identity/secrets. Explain the rejected alternatives and trade-offs.
 
 ## Implementation
 
-Explain FastAPI on Lambda, API Gateway, SQS, worker Lambda, DynamoDB, CloudWatch, Terraform and the GitHub Actions build-test-deploy pipeline. Demonstrate idempotency and tenant isolation.
+Explain the FC HTTP handler, Tablestore, OSS state, Alibaba Cloud logs/monitoring, Terraform and the GitHub Actions build-test-deploy pipeline. Demonstrate idempotency and tenant isolation.
 
 ## Evaluation and results
 
-Report five demand levels with p50/p95/p99 latency, throughput and error rate. Measure scaling delay using Lambda concurrency and queue depth. Include a deliberate failure experiment, recovery result and an honest account of missed targets. Every figure needs axis labels, units and a conclusion-led caption.
+Report five demand levels with p50/p95/p99 latency, throughput and error rate. Measure scaling delay using Function Compute concurrency/instance evidence. Include a deliberate failure experiment, recovery result and an honest account of missed targets. Every figure needs axis labels, units and a conclusion-led caption.
 
 ## Cost viability limitations and conclusion
 

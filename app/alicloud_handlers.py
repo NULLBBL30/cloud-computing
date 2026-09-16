@@ -72,12 +72,12 @@ def _apply_inventory_event(tenant: str, inventory_event: dict[str, Any]) -> str:
     table = os.environ["OTS_TABLE"]
     client = _ots()
     try:
-        client.put_row(table, Row([("PK", pk), ("SK", f"EVENT#{event_id}")], [("event_id", event_id)]), Condition(RowExistenceExpectation.EXPECT_NOT_EXIST))
+        client.put_row(table, Row([("PK", pk), ("SK", f"EVENT#{event_id}")], [("event_id", event_id), ("store_id", inventory_event["store_id"])]), Condition(RowExistenceExpectation.EXPECT_NOT_EXIST))
     except Exception:
         return "duplicate ignored"
     product = inventory_event["product_id"]
     delta = -int(inventory_event["quantity"]) if inventory_event["event_type"] == "SALE" else int(inventory_event["quantity"])
     _, row, _ = client.get_row(table, [("PK", pk), ("SK", f"PRODUCT#{product}")], None, 1)
     values = {} if row is None else dict((name, value) for name, value, *_ in row.attribute_columns)
-    client.put_row(table, Row([("PK", pk), ("SK", f"PRODUCT#{product}")], [("quantity", int(values.get("quantity", 0)) + delta), ("updated_event_id", event_id)]), Condition(RowExistenceExpectation.IGNORE))
+    client.put_row(table, Row([("PK", pk), ("SK", f"PRODUCT#{product}")], [("quantity", int(values.get("quantity", 0)) + delta), ("store_id", inventory_event["store_id"]), ("updated_event_id", event_id)]), Condition(RowExistenceExpectation.IGNORE))
     return "processed"

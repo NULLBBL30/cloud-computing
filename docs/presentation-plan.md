@@ -3,7 +3,7 @@
 | Time | Audience | Message |
 |---:|---|---|
 | 0:00-0:35 | Engineers | Customer scenario, variable retail demand and tenant-isolation requirement. |
-| 0:35-1:15 | Engineers | API Gateway, Lambda, SQS, worker Lambda, DynamoDB and CloudWatch architecture. |
+| 0:35-1:15 | Engineers | Function Compute HTTP API, synchronous Tablestore update, tenant isolation, observability and CI/CD architecture. |
 | 1:15-2:00 | Engineers | The material trade-offs from six ADRs. |
 | 2:00-3:00 | Engineers | Live demo: Tenant A event lifecycle and Tenant B isolation failure. |
 | 3:00-4:15 | Engineers | Five load levels, percentile latency, scaling delay and failure recovery. |
