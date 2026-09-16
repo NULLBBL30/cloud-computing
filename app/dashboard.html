@@ -48,10 +48,18 @@
   </main>
   <script>
     const result = document.querySelector('#result');
+    // Keep the console usable when it is opened from a local file, a preview
+    // page, or the FC endpoint itself.  This is the public course-demo API,
+    // not a credential; tenant access still requires the API key below.
+    const API_BASE = 'https://inventory-api-inventoplatform-mazoofjdvh.cn-hangzhou.fcapp.run';
     const headers = () => ({ 'Content-Type':'application/json', 'x-api-key':document.querySelector('#apiKey').value.trim() });
     async function request(path, options = {}) {
       result.textContent = '处理中…';
-      try { const response = await fetch(path, options); const data = await response.json(); result.textContent = JSON.stringify(data, null, 2); }
+      try {
+        const response = await fetch(API_BASE + path, options);
+        const data = await response.json();
+        result.textContent = JSON.stringify(data, null, 2);
+      }
       catch (error) { result.textContent = '请求失败：' + error.message; }
     }
     document.querySelector('#eventForm').addEventListener('submit', event => { event.preventDefault(); request('/events', { method:'POST', headers:headers(), body:JSON.stringify({ event_id:eventId.value, store_id:storeId.value, product_id:eventProduct.value, event_type:eventType.value, quantity:Number(quantity.value) }) }); });
