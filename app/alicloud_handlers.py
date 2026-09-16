@@ -41,7 +41,9 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
     # FC HTTP triggers expose the route as ``requestURI``; API Gateway-style
     # events instead use ``rawPath`` or ``path``.
     request_http = event.get("requestContext", {}).get("http", {})
-    path = event.get("rawPath") or event.get("path") or request_http.get("path") or event.get("requestURI") or "/"
+    # FC v3 may set ``rawPath`` to "/" while the real suffix is present in
+    # requestContext.http.path, so prefer the latter.
+    path = request_http.get("path") or event.get("rawPath") or event.get("path") or event.get("requestURI") or "/"
     method = (request_http.get("method") or event.get("httpMethod") or "GET").upper()
     if path == "/health":
         return _response(200, {"status": "ok", "provider": "alicloud"})
