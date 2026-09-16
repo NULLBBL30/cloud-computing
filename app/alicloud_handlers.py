@@ -18,6 +18,8 @@ def _body(event: dict[str, Any]) -> dict[str, Any]:
     body = body or "{}"
     if event.get("isBase64Encoded"):
         body = base64.b64decode(body).decode("utf-8")
+    if isinstance(body, bytes):
+        body = body.decode("utf-8")
     return json.loads(body) if isinstance(body, str) else body
 
 
@@ -91,7 +93,7 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
         return _response(200, {"status": result, "event_id": inventory_event.event_id})
     if method == "GET" and (path.startswith("/inventory/") or _query_value(event, "product_id")):
         product_id = _query_value(event, "product_id") or path.rsplit("/", 1)[-1]
-        _, row, _ = _ots().get_row(os.environ["OTS_TABLE"], [("PK", f"TENANT#{tenant}"), ("SK", f"PRODUCT#{product_id}")], None, 1)
+        _, row, _ = _ots().get_row(os.environ["OTS_TABLE"], [("PK", f"TENANT#{tenant}"), ("SK", f"PRODUCT#{product_id}")], None, None, 1)
         if row is None:
             return _response(404, {"detail": "inventory item not found"})
         values = dict((name, value) for name, value, *_ in row.attribute_columns)
@@ -111,7 +113,7 @@ def _apply_inventory_event(tenant: str, inventory_event: dict[str, Any]) -> str:
         return "duplicate ignored"
     product = inventory_event["product_id"]
     delta = -int(inventory_event["quantity"]) if inventory_event["event_type"] == "SALE" else int(inventory_event["quantity"])
-    _, row, _ = client.get_row(table, [("PK", pk), ("SK", f"PRODUCT#{product}")], None, 1)
+    _, row, _ = client.get_row(table, [("PK", pk), ("SK", f"PRODUCT#{product}")], None, None, 1)
     values = {} if row is None else dict((name, value) for name, value, *_ in row.attribute_columns)
     client.put_row(table, Row([("PK", pk), ("SK", f"PRODUCT#{product}")], [("quantity", int(values.get("quantity", 0)) + delta), ("store_id", inventory_event["store_id"]), ("updated_event_id", event_id)]), Condition(RowExistenceExpectation.IGNORE))
     return "processed"
