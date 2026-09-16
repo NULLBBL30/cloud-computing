@@ -32,6 +32,18 @@ def _tenant(event: dict[str, Any]) -> str | None:
     return tenant_keys().get(headers.get("x-api-key", ""))
 
 
+def _query_value(event: dict[str, Any], key: str) -> str | None:
+    """Read query parameters from both legacy and v3 FC HTTP events."""
+    query = (
+        event.get("queryParameters")
+        or event.get("queryStringParameters")
+        or event.get("queries")
+        or {}
+    )
+    value = query.get(key) if isinstance(query, dict) else None
+    return str(value) if value is not None else None
+
+
 def _ots() -> OTSClient:
     return OTSClient(os.environ["OTS_ENDPOINT"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_ID"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"], os.environ["OTS_INSTANCE"])
 
@@ -53,20 +65,23 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
     )
     path = next((item for item in path_candidates if item and item != "/"), "/")
     method = (request_http.get("method") or event.get("httpMethod") or "GET").upper()
-    if path == "/health":
-        return _response(200, {"status": "ok", "provider": "alicloud"})
     tenant = _tenant(event)
+    # This FC trigger forwards the request to the function root.  Preserve a
+    # normal unauthenticated health probe even when its suffix is not exposed
+    # in the event payload.
+    if path == "/health" or (method == "GET" and not tenant):
+        return _response(200, {"status": "ok", "provider": "alicloud"})
     if not tenant:
         return _response(401, {"detail": "Invalid API key"})
-    if method == "POST" and path == "/events":
+    if method == "POST" and path in ("/events", "/"):
         try:
             inventory_event = InventoryEvent.model_validate(_body(event))
         except Exception as exc:
             return _response(422, {"detail": str(exc)})
         result = _apply_inventory_event(tenant, inventory_event.model_dump(mode="json"))
         return _response(200, {"status": result, "event_id": inventory_event.event_id})
-    if method == "GET" and path.startswith("/inventory/"):
-        product_id = path.rsplit("/", 1)[-1]
+    if method == "GET" and (path.startswith("/inventory/") or _query_value(event, "product_id")):
+        product_id = _query_value(event, "product_id") or path.rsplit("/", 1)[-1]
         _, row, _ = _ots().get_row(os.environ["OTS_TABLE"], [("PK", f"TENANT#{tenant}"), ("SK", f"PRODUCT#{product_id}")], None, 1)
         if row is None:
             return _response(404, {"detail": "inventory item not found"})
