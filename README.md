@@ -29,6 +29,7 @@ Run `./scripts/run-evaluation.ps1 -BaseUrl <fc-http-trigger-url>` and retain raw
 - `docs/requirements.md`
 - `docs/adr/`
 - `docs/evaluation-plan.md`
+- `docs/quick-evaluation-results.md`
 - `docs/paper-outline.md`
 - `docs/presentation-plan.md`
 - `docs/operations-runbook.md`
