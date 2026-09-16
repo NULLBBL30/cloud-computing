@@ -23,14 +23,24 @@ def _body(event: dict[str, Any]) -> dict[str, Any]:
     return json.loads(body) if isinstance(body, str) else body
 
 
-def _response(code: int, payload: dict[str, Any]) -> str:
+def _response(code: int, payload: dict[str, Any], start_response: Any = None) -> str:
     """Serialize the payload for the FC Python HTTP-trigger handler.
 
     This runtime expects the handler return value itself to be the HTTP body;
     returning a Python dict serializes only its keys (``statusCodeheadersbody``).
     """
-    del code  # FC's legacy Python HTTP trigger always emits the returned body.
+    if callable(start_response):
+        reason = {200: "OK", 401: "Unauthorized", 404: "Not Found", 422: "Unprocessable Entity"}.get(code, "OK")
+        start_response(f"{code} {reason}", [("Content-Type", "application/json; charset=utf-8")])
     return json.dumps(payload)
+
+
+def _dashboard(start_response: Any = None) -> str:
+    """Return the same-origin browser console bundled with the FC package."""
+    if callable(start_response):
+        start_response("200 OK", [("Content-Type", "text/html; charset=utf-8")])
+    with open(os.path.join(os.path.dirname(__file__), "dashboard.html"), encoding="utf-8") as page:
+        return page.read()
 
 
 def _tenant(event: dict[str, Any]) -> str | None:
@@ -57,7 +67,7 @@ def _ots() -> OTSClient:
     return OTSClient(os.environ["OTS_ENDPOINT"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_ID"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"], os.environ["OTS_INSTANCE"])
 
 
-def http_handler(event: Any, _context: Any) -> dict[str, Any]:
+def http_handler(event: Any, _context: Any) -> str:
     event = json.loads(event.decode("utf-8") if isinstance(event, bytes) else event) if not isinstance(event, dict) else event
     # FC HTTP triggers expose the route as ``requestURI``; API Gateway-style
     # events instead use ``rawPath`` or ``path``.
@@ -80,25 +90,27 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
     # This FC trigger forwards the request to the function root.  Preserve a
     # normal unauthenticated health probe even when its suffix is not exposed
     # in the event payload.
-    if path == "/health" or (method == "GET" and not tenant):
-        return _response(200, {"status": "ok", "provider": "alicloud"})
+    if method == "GET" and path == "/":
+        return _dashboard(_context)
+    if path == "/health":
+        return _response(200, {"status": "ok", "provider": "alicloud"}, _context)
     if not tenant:
-        return _response(401, {"detail": "Invalid API key"})
+        return _response(401, {"detail": "Invalid API key"}, _context)
     if method == "POST" and path in ("/events", "/"):
         try:
             inventory_event = InventoryEvent.model_validate(_body(event))
         except Exception as exc:
-            return _response(422, {"detail": str(exc)})
+            return _response(422, {"detail": str(exc)}, _context)
         result = _apply_inventory_event(tenant, inventory_event.model_dump(mode="json"))
-        return _response(200, {"status": result, "event_id": inventory_event.event_id})
+        return _response(200, {"status": result, "event_id": inventory_event.event_id}, _context)
     if method == "GET" and (path.startswith("/inventory/") or _query_value(event, "product_id")):
         product_id = _query_value(event, "product_id") or path.rsplit("/", 1)[-1]
         _, row, _ = _ots().get_row(os.environ["OTS_TABLE"], [("PK", f"TENANT#{tenant}"), ("SK", f"PRODUCT#{product_id}")], None, None, 1)
         if row is None:
-            return _response(404, {"detail": "inventory item not found"})
+            return _response(404, {"detail": "inventory item not found"}, _context)
         values = dict((name, value) for name, value, *_ in row.attribute_columns)
-        return _response(200, {"tenant_id": tenant, "product_id": product_id, "quantity": int(values.get("quantity", 0))})
-    return _response(404, {"detail": "not found"})
+        return _response(200, {"tenant_id": tenant, "product_id": product_id, "quantity": int(values.get("quantity", 0))}, _context)
+    return _response(404, {"detail": "not found"}, _context)
 
 
 def _apply_inventory_event(tenant: str, inventory_event: dict[str, Any]) -> str:

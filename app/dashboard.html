@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>库存事件控制台</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, "Microsoft YaHei", sans-serif; background:#0b1220; color:#e5edf8; }
+    * { box-sizing:border-box; } body { margin:0; min-height:100vh; background:radial-gradient(circle at top right,#173c5b 0,#0b1220 45rem); }
+    main { width:min(960px,calc(100% - 32px)); margin:0 auto; padding:48px 0; }
+    h1 { margin:0; font-size:clamp(1.8rem,4vw,2.7rem); } .lead { color:#a8bad0; margin:10px 0 30px; font-size:1rem; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; } .card { background:#111d30e8; border:1px solid #294461; border-radius:16px; padding:22px; box-shadow:0 12px 36px #0004; }
+    .full { grid-column:1/-1; } h2 { margin:0 0 18px; font-size:1.15rem; } label { display:block; margin:12px 0 6px; color:#c3d3e5; font-size:.9rem; }
+    input, select { width:100%; padding:11px 12px; border:1px solid #41617e; border-radius:9px; background:#0b1627; color:#fff; font-size:1rem; }
+    button { margin-top:18px; width:100%; border:0; border-radius:9px; padding:12px; background:#35a876; color:#062215; font-weight:700; font-size:1rem; cursor:pointer; } button:hover { background:#55ca96; }
+    pre { margin:0; min-height:90px; white-space:pre-wrap; overflow-wrap:anywhere; padding:15px; border-radius:10px; background:#07101d; color:#9ee6c4; font-size:.88rem; }
+    .hint { color:#8ca4bd; font-size:.82rem; margin:8px 0 0; } @media(max-width:700px){ main{padding:28px 0}.grid{grid-template-columns:1fr}.full{grid-column:auto} }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>库存事件控制台</h1>
+    <p class="lead">同步写入库存，并按租户隔离查询结果。</p>
+    <section class="grid">
+      <div class="card full">
+        <h2>访问凭证</h2>
+        <label for="apiKey">API Key</label>
+        <input id="apiKey" value="demo-key-a" autocomplete="off">
+        <p class="hint">演示租户 A：demo-key-a；演示租户 B：demo-key-b。</p>
+      </div>
+      <form id="eventForm" class="card">
+        <h2>写入库存事件</h2>
+        <label>事件 ID<input id="eventId" value="web-demo-001" required></label>
+        <label>门店 ID<input id="storeId" value="store-hangzhou-01" required></label>
+        <label>商品 ID<input id="eventProduct" value="SKU-001" required></label>
+        <label>事件类型<select id="eventType"><option>STOCK_RECEIVED</option><option>SALE</option><option>RETURN</option><option>ADJUSTMENT</option></select></label>
+        <label>数量<input id="quantity" type="number" value="10" min="1" required></label>
+        <button>提交同步事件</button>
+      </form>
+      <form id="queryForm" class="card">
+        <h2>查询库存</h2>
+        <label>商品 ID<input id="queryProduct" value="SKU-001" required></label>
+        <button>查询当前租户</button>
+        <p class="hint">切换 API Key 后查询同一商品，可展示租户隔离。</p>
+      </form>
+      <div class="card full"><h2>响应结果</h2><pre id="result">等待操作…</pre></div>
+    </section>
+  </main>
+  <script>
+    const result = document.querySelector('#result');
+    const headers = () => ({ 'Content-Type':'application/json', 'x-api-key':document.querySelector('#apiKey').value.trim() });
+    async function request(path, options = {}) {
+      result.textContent = '处理中…';
+      try { const response = await fetch(path, options); const data = await response.json(); result.textContent = JSON.stringify(data, null, 2); }
+      catch (error) { result.textContent = '请求失败：' + error.message; }
+    }
+    document.querySelector('#eventForm').addEventListener('submit', event => { event.preventDefault(); request('/events', { method:'POST', headers:headers(), body:JSON.stringify({ event_id:eventId.value, store_id:storeId.value, product_id:eventProduct.value, event_type:eventType.value, quantity:Number(quantity.value) }) }); });
+    document.querySelector('#queryForm').addEventListener('submit', event => { event.preventDefault(); request('/inventory/' + encodeURIComponent(queryProduct.value), { headers:headers() }); });
+  </script>
+</body>
+</html>
