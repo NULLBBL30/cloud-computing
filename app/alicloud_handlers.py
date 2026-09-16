@@ -3,6 +3,7 @@ import base64
 import json
 import os
 from typing import Any
+from urllib.parse import parse_qs
 
 from tablestore import OTSClient, Condition, Row, RowExistenceExpectation
 
@@ -11,7 +12,10 @@ from app.models import InventoryEvent
 
 
 def _body(event: dict[str, Any]) -> dict[str, Any]:
-    body = event.get("body") or event.get("bodyString") or "{}"
+    body = event.get("body") or event.get("bodyString")
+    if body is None and event.get("wsgi.input") is not None:
+        body = event["wsgi.input"].read()
+    body = body or "{}"
     if event.get("isBase64Encoded"):
         body = base64.b64decode(body).decode("utf-8")
     return json.loads(body) if isinstance(body, str) else body
@@ -27,18 +31,10 @@ def _response(code: int, payload: dict[str, Any]) -> str:
     return json.dumps(payload)
 
 
-def _event_shape(event: dict[str, Any]) -> dict[str, list[str]]:
-    """Non-sensitive diagnostic aid for FC HTTP event-version compatibility."""
-    context = event.get("requestContext")
-    return {
-        "event_keys": sorted(str(key) for key in event),
-        "request_context_keys": sorted(str(key) for key in context) if isinstance(context, dict) else [],
-    }
-
-
 def _tenant(event: dict[str, Any]) -> str | None:
     headers = {str(k).lower(): v for k, v in (event.get("headers") or {}).items()}
-    return tenant_keys().get(headers.get("x-api-key", ""))
+    api_key = headers.get("x-api-key") or event.get("HTTP_X_API_KEY", "")
+    return tenant_keys().get(api_key)
 
 
 def _query_value(event: dict[str, Any], key: str) -> str | None:
@@ -50,6 +46,8 @@ def _query_value(event: dict[str, Any], key: str) -> str | None:
         or {}
     )
     value = query.get(key) if isinstance(query, dict) else None
+    if value is None and event.get("QUERY_STRING"):
+        value = parse_qs(event["QUERY_STRING"]).get(key, [None])[0]
     return str(value) if value is not None else None
 
 
@@ -66,6 +64,8 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
     # can contain only the trigger root ("/") while another retains the
     # requested suffix, so select the first non-root candidate.
     path_candidates = (
+        event.get("PATH_INFO"),
+        event.get("fc.request_uri"),
         request_http.get("path"),
         event.get("rawPath"),
         event.get("path"),
@@ -73,13 +73,13 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
         event.get("requestURI"),
     )
     path = next((item for item in path_candidates if item and item != "/"), "/")
-    method = (request_http.get("method") or event.get("httpMethod") or "GET").upper()
+    method = (event.get("REQUEST_METHOD") or request_http.get("method") or event.get("httpMethod") or "GET").upper()
     tenant = _tenant(event)
     # This FC trigger forwards the request to the function root.  Preserve a
     # normal unauthenticated health probe even when its suffix is not exposed
     # in the event payload.
     if path == "/health" or (method == "GET" and not tenant):
-        return _response(200, {"status": "ok", "provider": "alicloud", "event_shape": _event_shape(event)})
+        return _response(200, {"status": "ok", "provider": "alicloud"})
     if not tenant:
         return _response(401, {"detail": "Invalid API key"})
     if method == "POST" and path in ("/events", "/"):
