@@ -1,6 +1,6 @@
 # Multi Tenant Inventory Event Platform
 
-The assessed deployment uses Alibaba Cloud Function Compute HTTP Trigger, MNS Topic, Function Compute worker, Tablestore, CloudMonitor and Log Service. Local moto is retained only for fast unit tests.
+The assessed deployment uses an Alibaba Cloud Function Compute HTTP Trigger and Tablestore. Inventory events are synchronously applied with idempotency protection; local moto is retained only for fast unit tests.
 
 ## Deployment
 

@@ -1,15 +1,9 @@
-"""Alibaba Cloud FC handlers for the deployed platform.
-
-Local FastAPI/moto remains for unit tests. FC uses these native HTTP and MNS
-handlers, keeping cloud credentials in FC environment variables only.
-"""
+"""Alibaba Cloud FC HTTP handler for the deployed platform."""
 import base64
 import json
 import os
 from typing import Any
 
-from mns.account import Account
-from mns.topic import TopicMessage
 from tablestore import OTSClient, Condition, Row, RowExistenceExpectation
 
 from app.config import tenant_keys
@@ -38,12 +32,6 @@ def _tenant(event: dict[str, Any]) -> str | None:
     return tenant_keys().get(headers.get("x-api-key", ""))
 
 
-def _mns_topic():
-    endpoint = os.environ["MNS_ENDPOINT"]
-    account = Account(endpoint, os.environ["ALIBABA_CLOUD_ACCESS_KEY_ID"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"])
-    return account.get_topic_ref(os.environ["MNS_TOPIC"])
-
-
 def _ots() -> OTSClient:
     return OTSClient(os.environ["OTS_ENDPOINT"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_ID"], os.environ["ALIBABA_CLOUD_ACCESS_KEY_SECRET"], os.environ["OTS_INSTANCE"])
 
@@ -64,9 +52,8 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
             inventory_event = InventoryEvent.model_validate(_body(event))
         except Exception as exc:
             return _response(422, {"detail": str(exc)})
-        message = {"tenant_id": tenant, **inventory_event.model_dump(mode="json")}
-        _mns_topic().publish_message(TopicMessage(json.dumps(message)))
-        return _response(202, {"status": "accepted", "event_id": inventory_event.event_id})
+        result = _apply_inventory_event(tenant, inventory_event.model_dump(mode="json"))
+        return _response(200, {"status": result, "event_id": inventory_event.event_id})
     if method == "GET" and path.startswith("/inventory/"):
         product_id = path.rsplit("/", 1)[-1]
         _, row, _ = _ots().get_row(os.environ["OTS_TABLE"], [("PK", f"TENANT#{tenant}"), ("SK", f"PRODUCT#{product_id}")], None, 1)
@@ -77,12 +64,9 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
     return _response(404, {"detail": "not found"})
 
 
-def worker_handler(event: Any, _context: Any) -> str:
-    event = json.loads(event.decode("utf-8") if isinstance(event, bytes) else event) if not isinstance(event, dict) else event
-    data = event.get("data", event)
-    payload = data.get("messageBody", data.get("body", data)) if isinstance(data, dict) else data
-    inventory_event = json.loads(payload) if isinstance(payload, str) else payload
-    tenant, event_id = inventory_event["tenant_id"], inventory_event["event_id"]
+def _apply_inventory_event(tenant: str, inventory_event: dict[str, Any]) -> str:
+    """Apply an idempotent inventory event in the request path."""
+    event_id = inventory_event["event_id"]
     pk = f"TENANT#{tenant}"
     table = os.environ["OTS_TABLE"]
     client = _ots()

@@ -1,3 +1,3 @@
-# ADR 002 Queued processing
+# ADR 002 Synchronous event processing
 
-Decision: accept events asynchronously through SQS. Rejected alternative: synchronous API-to-database updates. SQS absorbs bursts and isolates worker failure; the trade-off is eventual consistency and duplicate delivery.
+Decision: process inventory events synchronously in the Function Compute HTTP handler and write them directly to Tablestore. We considered an MNS queued architecture, but rejected it for the initial platform because the expected coursework workload does not justify its additional operational cost and complexity. The trade-off is that request latency includes the database write, while the platform gains immediate read-after-write behaviour and avoids queue charges.

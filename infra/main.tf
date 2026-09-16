@@ -28,8 +28,6 @@ variable "runtime_access_secret" {
 }
 provider "alicloud" { region = var.region }
 
-data "alicloud_account" "current" {}
-
 data "archive_file" "platform" {
   type = "zip"
   source_dir = "${path.module}/../dist/package"
@@ -61,12 +59,6 @@ resource "alicloud_ots_table" "inventory" {
     type = "String"
   }
 }
-resource "alicloud_mns_topic" "events" {
-  name = "${var.project_name}-events"
-  maximum_message_size = 65536
-  logging_enabled = true
-}
-
 resource "alicloud_ram_role" "fc" {
   name = "${var.project_name}-fc-role"
   document = jsonencode({ Version = "1", Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = ["fc.aliyuncs.com"] } }] })
@@ -83,19 +75,11 @@ resource "alicloud_ram_role_policy_attachment" "fc_ots" {
   policy_name = "AliyunOTSFullAccess"
   policy_type = "System"
 }
-resource "alicloud_ram_role_policy_attachment" "fc_mns" {
-  role_name = alicloud_ram_role.fc.name
-  policy_name = "AliyunMNSFullAccess"
-  policy_type = "System"
-}
-
 locals {
   environment = {
     TENANT_KEYS = var.tenant_keys_json
     ALIBABA_CLOUD_ACCESS_KEY_ID = var.runtime_access_key
     ALIBABA_CLOUD_ACCESS_KEY_SECRET = var.runtime_access_secret
-    MNS_TOPIC = alicloud_mns_topic.events.name
-    MNS_ENDPOINT = "https://${var.region}.mns.aliyuncs.com"
     OTS_INSTANCE = alicloud_ots_instance.inventory.name
     OTS_TABLE = alicloud_ots_table.inventory.table_name
     OTS_ENDPOINT = "https://${alicloud_ots_instance.inventory.name}.${var.region}.ots.aliyuncs.com"
@@ -120,17 +104,6 @@ resource "alicloud_fc_function" "api" {
   handler = "app.alicloud_handlers.http_handler"
   environment_variables = local.environment
 }
-resource "alicloud_fc_function" "worker" {
-  service = alicloud_fc_service.platform.name
-  name = "inventory-worker"
-  description = "MNS inventory event worker"
-  filename = data.archive_file.platform.output_path
-  code_checksum = data.alicloud_file_crc64_checksum.platform.checksum
-  memory_size = "512"
-  runtime = "python3.10"
-  handler = "app.alicloud_handlers.worker_handler"
-  environment_variables = local.environment
-}
 resource "alicloud_fc_trigger" "api_http" {
   service = alicloud_fc_service.platform.name
   function = alicloud_fc_function.api.name
@@ -138,15 +111,4 @@ resource "alicloud_fc_trigger" "api_http" {
   type = "http"
   config = jsonencode({ authType = "anonymous", methods = ["GET", "POST"] })
 }
-resource "alicloud_fc_trigger" "worker_mns" {
-  service = alicloud_fc_service.platform.name
-  function = alicloud_fc_function.worker.name
-  name = "mns-topic"
-  type = "mns_topic"
-  role = alicloud_ram_role.fc.arn
-  source_arn = "acs:mns:${var.region}:${data.alicloud_account.current.id}:/topics/${alicloud_mns_topic.events.name}"
-  config_mns = jsonencode({ notifyContentFormat = "JSON", notifyStrategy = "BACKOFF_RETRY" })
-}
-
-output "mns_topic" { value = alicloud_mns_topic.events.name }
 output "deploy_note" { value = "Retrieve the FC HTTP trigger URL from the FC console after apply." }

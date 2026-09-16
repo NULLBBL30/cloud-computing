@@ -24,15 +24,13 @@ jobs:
         # Build native dependencies for the same interpreter used by FC.
         with: { python-version: '3.10' }
       - run: pip install -r requirements.txt && pytest -q
-      - run: rm -rf dist/package && mkdir -p dist/package && pip install -r requirements-fc.txt --target dist/package && cp -r app worker vendor/crc32c dist/package/
+      - run: rm -rf dist/package && mkdir -p dist/package && pip install -r requirements-fc.txt --target dist/package && cp -r app vendor/crc32c dist/package/
       - uses: hashicorp/setup-terraform@v3
       - run: |
           terraform -chdir=infra init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=terraform/inventory-platform.tfstate" -backend-config="encrypt=true"
           terraform -chdir=infra state show alicloud_ots_instance.inventory >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ots_instance.inventory invplatots
-          terraform -chdir=infra state show alicloud_mns_topic.events >/dev/null 2>&1 || terraform -chdir=infra import alicloud_mns_topic.events inventory-platform-events
           terraform -chdir=infra state show alicloud_ram_role.fc >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role.fc inventory-platform-fc-role
           terraform -chdir=infra state show alicloud_ram_role_policy_attachment.fc_log >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role_policy_attachment.fc_log role:AliyunLogFullAccess:System:inventory-platform-fc-role
           terraform -chdir=infra state show alicloud_ram_role_policy_attachment.fc_ots >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role_policy_attachment.fc_ots role:AliyunOTSFullAccess:System:inventory-platform-fc-role
-          terraform -chdir=infra state show alicloud_ram_role_policy_attachment.fc_mns >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role_policy_attachment.fc_mns role:AliyunMNSFullAccess:System:inventory-platform-fc-role
           terraform -chdir=infra state show alicloud_fc_service.platform >/dev/null 2>&1 || terraform -chdir=infra import alicloud_fc_service.platform inventory-platform
           terraform -chdir=infra apply -auto-approve
