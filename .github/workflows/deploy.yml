@@ -28,6 +28,10 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - run: |
           terraform -chdir=infra init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="key=terraform/inventory-platform.tfstate" -backend-config="encrypt=true"
+          # MNS has already been disabled for this account.  Its API rejects
+          # refresh requests, so detach the retired topic from state before
+          # Terraform removes the remaining worker and IAM resources.
+          terraform -chdir=infra state rm alicloud_mns_topic.events >/dev/null 2>&1 || true
           terraform -chdir=infra state show alicloud_ots_instance.inventory >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ots_instance.inventory invplatots
           terraform -chdir=infra state show alicloud_ram_role.fc >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role.fc inventory-platform-fc-role
           terraform -chdir=infra state show alicloud_ram_role_policy_attachment.fc_log >/dev/null 2>&1 || terraform -chdir=infra import alicloud_ram_role_policy_attachment.fc_log role:AliyunLogFullAccess:System:inventory-platform-fc-role
