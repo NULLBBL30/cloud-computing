@@ -2,21 +2,21 @@
 
 ## Reproducible load protocol
 
-Run each profile three times against the deployed API URL. Save unchanged Locust CSV exports under `data/raw/load/<profile>-run<n>/`. Record the cloud region, commit hash, Function Compute memory/concurrency configuration and test date in `run-metadata.json`.
+Run each profile three times against the deployed API URL. `scripts/run-evaluation.ps1` creates timestamped CSV exports and `run-metadata.json` automatically. Record the Function Compute memory/concurrency configuration in the evidence log.
 
 | Profile | Target rate | Duration | Purpose |
 |---|---:|---:|---|
-| Idle | 1 RPS | 5 min | Baseline and cold-start observation |
-| Low | 10 RPS | 5 min | Establish baseline |
-| Target | 50 RPS | 10 min | Check initial requirement |
-| High | 100 RPS | 10 min | Observe burst behaviour |
-| Stress | Step +25 RPS / 2 min | Until degradation | Identify bottleneck |
+| Idle | 1 user, approximately 1 RPS | 5 min | Baseline and cold-start observation |
+| Low | 10 users, approximately 10 RPS | 5 min | Establish baseline |
+| Target | 50 users, approximately 50 RPS | 10 min | Check initial requirement |
+| High | 100 users, approximately 100 RPS | 10 min | Observe burst behaviour |
+| Stress | 150 users, approximately 150 RPS | 10 min | Identify bottleneck |
 
 Report p50, p95, p99, throughput, error rate, FC concurrency/instance evidence and the observed bottleneck for every run. Do not report only mean latency.
 
 ## Scaling measurement
 
-Function Compute scales HTTP-handler instances automatically as concurrent demand increases. Apply a controlled jump from 10 to 100 RPS and record spike start, first observed instance/concurrency increase, maximum concurrency and return-to-baseline time. Report scaling delay as the interval from spike start to the first sustained increase. Configure an alert on FC invocation errors or error rate.
+Function Compute scales HTTP-handler instances automatically as concurrent demand increases. Apply a controlled jump from 10 to 100 users and record spike start, first observed instance/concurrency increase, maximum concurrency and return-to-baseline time. Report scaling delay as the interval from spike start to the first sustained increase. Configure an alert on FC invocation errors or error rate.
 
 ## Failure protocol
 

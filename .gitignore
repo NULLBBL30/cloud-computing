@@ -11,3 +11,4 @@ data/raw/*.json
 *.tfstate.*
 dist/
 data/raw/runtime/
+data/derived/

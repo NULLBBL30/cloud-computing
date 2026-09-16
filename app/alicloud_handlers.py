@@ -5,7 +5,7 @@ import os
 from typing import Any
 from urllib.parse import parse_qs
 
-from tablestore import OTSClient, Condition, Row, RowExistenceExpectation
+from tablestore import OTSClient, OTSServiceError, Condition, Row, RowExistenceExpectation
 
 from app.config import tenant_keys
 from app.models import InventoryEvent
@@ -128,8 +128,13 @@ def _apply_inventory_event(tenant: str, inventory_event: dict[str, Any]) -> str:
     client = _ots()
     try:
         client.put_row(table, Row([("PK", pk), ("SK", f"EVENT#{event_id}")], [("event_id", event_id), ("store_id", inventory_event["store_id"])]), Condition(RowExistenceExpectation.EXPECT_NOT_EXIST))
-    except Exception:
-        return "duplicate ignored"
+    except OTSServiceError as exc:
+        # Only a failed EXPECT_NOT_EXIST check denotes a previously accepted
+        # event.  Treating timeouts or permission failures as duplicates would
+        # hide a real data-store outage from callers and monitoring.
+        if exc.get_error_code() == "OTSConditionCheckFail":
+            return "duplicate ignored"
+        raise
     product = inventory_event["product_id"]
     delta = -int(inventory_event["quantity"]) if inventory_event["event_type"] == "SALE" else int(inventory_event["quantity"])
     _, row, _ = client.get_row(table, [("PK", pk), ("SK", f"PRODUCT#{product}")], None, None, 1)
