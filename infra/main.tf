@@ -109,6 +109,6 @@ resource "alicloud_fc_trigger" "api_http" {
   function = alicloud_fc_function.api.name
   name = "http"
   type = "http"
-  config = jsonencode({ authType = "anonymous", methods = ["GET", "POST"] })
+  config = jsonencode({ authType = "anonymous", methods = ["GET", "POST", "OPTIONS"] })
 }
 output "deploy_note" { value = "Retrieve the FC HTTP trigger URL from the FC console after apply." }

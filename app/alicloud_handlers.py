@@ -31,7 +31,12 @@ def _response(code: int, payload: dict[str, Any], start_response: Any = None) ->
     """
     if callable(start_response):
         reason = {200: "OK", 401: "Unauthorized", 404: "Not Found", 422: "Unprocessable Entity"}.get(code, "OK")
-        start_response(f"{code} {reason}", [("Content-Type", "application/json; charset=utf-8")])
+        start_response(f"{code} {reason}", [
+            ("Content-Type", "application/json; charset=utf-8"),
+            ("Access-Control-Allow-Origin", "*"),
+            ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+            ("Access-Control-Allow-Headers", "Content-Type, x-api-key"),
+        ])
     return json.dumps(payload)
 
 
@@ -86,6 +91,8 @@ def http_handler(event: Any, _context: Any) -> str:
     )
     path = next((item for item in path_candidates if item and item != "/"), "/")
     method = (event.get("REQUEST_METHOD") or request_http.get("method") or event.get("httpMethod") or "GET").upper()
+    if method == "OPTIONS":
+        return _response(200, {}, _context)
     tenant = _tenant(event)
     # This FC trigger forwards the request to the function root.  Preserve a
     # normal unauthenticated health probe even when its suffix is not exposed
