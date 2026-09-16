@@ -40,8 +40,9 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
     event = json.loads(event.decode("utf-8") if isinstance(event, bytes) else event) if not isinstance(event, dict) else event
     # FC HTTP triggers expose the route as ``requestURI``; API Gateway-style
     # events instead use ``rawPath`` or ``path``.
-    path = event.get("rawPath") or event.get("path") or event.get("requestURI") or "/"
-    method = (event.get("requestContext", {}).get("http", {}).get("method") or event.get("httpMethod") or "GET").upper()
+    request_http = event.get("requestContext", {}).get("http", {})
+    path = event.get("rawPath") or event.get("path") or request_http.get("path") or event.get("requestURI") or "/"
+    method = (request_http.get("method") or event.get("httpMethod") or "GET").upper()
     if path == "/health":
         return _response(200, {"status": "ok", "provider": "alicloud"})
     tenant = _tenant(event)
