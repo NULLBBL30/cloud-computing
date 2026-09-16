@@ -27,6 +27,15 @@ def _response(code: int, payload: dict[str, Any]) -> str:
     return json.dumps(payload)
 
 
+def _event_shape(event: dict[str, Any]) -> dict[str, list[str]]:
+    """Non-sensitive diagnostic aid for FC HTTP event-version compatibility."""
+    context = event.get("requestContext")
+    return {
+        "event_keys": sorted(str(key) for key in event),
+        "request_context_keys": sorted(str(key) for key in context) if isinstance(context, dict) else [],
+    }
+
+
 def _tenant(event: dict[str, Any]) -> str | None:
     headers = {str(k).lower(): v for k, v in (event.get("headers") or {}).items()}
     return tenant_keys().get(headers.get("x-api-key", ""))
@@ -70,7 +79,7 @@ def http_handler(event: Any, _context: Any) -> dict[str, Any]:
     # normal unauthenticated health probe even when its suffix is not exposed
     # in the event payload.
     if path == "/health" or (method == "GET" and not tenant):
-        return _response(200, {"status": "ok", "provider": "alicloud"})
+        return _response(200, {"status": "ok", "provider": "alicloud", "event_shape": _event_shape(event)})
     if not tenant:
         return _response(401, {"detail": "Invalid API key"})
     if method == "POST" and path in ("/events", "/"):
