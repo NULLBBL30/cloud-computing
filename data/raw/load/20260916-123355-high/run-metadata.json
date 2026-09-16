@@ -1,0 +1,10 @@
+{
+  "base_url": "https://inventory-api-inventoplatform-mazoofjdvh.cn-hangzhou.fcapp.run",
+  "run_id": "20260916-123355",
+  "profile": "high",
+  "commit": "38a97f14e19f932065a80cfcaddf6e9bd48d66a1",
+  "duration_minutes": 1,
+  "timestamp_utc": "2026-09-16T04:36:57.7782506Z",
+  "users": 100,
+  "region": "cn-hangzhou"
+}
