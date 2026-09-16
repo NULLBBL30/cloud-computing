@@ -50,7 +50,9 @@ def _ots() -> OTSClient:
 
 def http_handler(event: Any, _context: Any) -> dict[str, Any]:
     event = json.loads(event.decode("utf-8") if isinstance(event, bytes) else event) if not isinstance(event, dict) else event
-    path = event.get("rawPath") or event.get("path") or "/"
+    # FC HTTP triggers expose the route as ``requestURI``; API Gateway-style
+    # events instead use ``rawPath`` or ``path``.
+    path = event.get("rawPath") or event.get("path") or event.get("requestURI") or "/"
     method = (event.get("requestContext", {}).get("http", {}).get("method") or event.get("httpMethod") or "GET").upper()
     if path == "/health":
         return _response(200, {"status": "ok", "provider": "alicloud"})
