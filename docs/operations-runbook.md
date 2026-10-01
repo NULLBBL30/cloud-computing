@@ -4,7 +4,7 @@
 
 Keep the Function Compute HTTP trigger public only for the assessment period. The application still requires `x-api-key` for inventory reads and writes. Use only the demo keys in the browser console. Keep Alibaba Cloud access keys only in GitHub repository secrets.
 
-Before deploying the transactional event handler, confirm that local transactions are enabled for the `inventory` Tablestore table. This capability is disabled by default and may require Alibaba Cloud support to enable it. The current Terraform configuration does not enable it. If the capability is unavailable, stop before evaluation rather than silently falling back to the previous non-atomic read-modify-write flow.
+Inventory writes use one conditional event-row insert and do not require Tablestore Local Transactions. Inventory reads sum event deltas over the existing product-row opening balance. Because this read scans the tenant event history, keep the evaluation dataset bounded and report the resulting read latency and cost honestly.
 
 ## Log evidence
 

@@ -1,6 +1,6 @@
 # Serverless Multi Tenant Inventory Platform on Alibaba Cloud
 
-The assessed system is a course prototype for multi-store retailers. A public Alibaba Cloud Function Compute HTTP trigger authenticates a tenant from an API key, validates an inventory event, records its identifier for idempotency, and synchronously updates a tenant-partitioned Tablestore row. The browser console is a demonstration client, not the platform boundary.
+The assessed system is a course prototype for multi-store retailers. A public Alibaba Cloud Function Compute HTTP trigger authenticates a tenant from an API key, validates an inventory event, and conditionally appends one event row to a tenant-partitioned Tablestore table. Inventory reads derive quantity from the legacy opening balance plus the matching event deltas. The browser console is a demonstration client, not the platform boundary.
 
 ## Deployment
 
@@ -23,9 +23,11 @@ Run `python -m pytest -q` to verify the same isolation, idempotency, API-key rej
 
 Run `./scripts/run-evaluation.ps1 -BaseUrl <fc-http-trigger-url>` and retain raw results in `data/raw/`. Use the five-level load, scaling and fault protocol in `docs/evaluation-plan.md` against the deployed endpoint.
 
-### Tablestore transaction prerequisite
+### Inventory write model
 
-Inventory event writes use a Tablestore local transaction so the event deduplication row and inventory row commit or abort together. The `inventory` table must have local transactions enabled before deploying this version. Tablestore local transactions are not enabled by default and may require Alibaba Cloud to enable the feature for the account/table; confirm this before running CI/CD or evaluation. The current Terraform provider resource does not configure this table feature. If local transactions are unavailable, do not claim the event update is atomic or use this implementation for evaluation.
+Each accepted event is one conditional Tablestore row write keyed by tenant and `event_id`. Concurrent duplicate submissions therefore have one winner, while distinct events cannot overwrite one another's quantity updates. A retry after an uncertain write response sees the existing event and does not apply the change twice. No cross-row transaction is used.
+
+Inventory reads sum the matching event deltas and add the existing `PRODUCT#...` row as an opening-balance snapshot. This preserves quantities already stored before the event-ledger deployment; older event rows without a delta are ignored because their effects are already reflected in that snapshot. The tradeoff is that reads scan the tenant's event rows and become more expensive as history grows. Record this limitation when reporting load and cost results.
 
 ## Submission documents
 

@@ -9,4 +9,4 @@
 | Durability | RPO < 5 min, RTO < 30 min | Same | Tablestore backup/recovery plan and restore drill |
 | Security | 100% authenticated inventory requests; no repository secrets | Same | API tests, secret scan and RAM review |
 
-Tenant identity is derived only from the API key. Tablestore rows use `PK = TENANT#{tenant_id}` and `SK = PRODUCT#{product_id}`; `store_id` is retained as a business attribute and never authorizes access.
+Tenant identity is derived only from the API key. New inventory events use `PK = TENANT#{tenant_id}` and `SK = EVENT#{event_id}`. The conditional insert is the single write for an event and provides tenant-scoped idempotency. Reads sum event deltas matching the requested product. Existing `SK = PRODUCT#{product_id}` rows remain as opening-balance snapshots during the transition. `store_id` is retained as a business attribute and never authorizes access.

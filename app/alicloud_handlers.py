@@ -2,11 +2,18 @@
 import base64
 import json
 import os
-import time
 from typing import Any
 from urllib.parse import parse_qs
 
-from tablestore import OTSClient, OTSServiceError, Condition, Row, RowExistenceExpectation
+from tablestore import (
+    INF_MAX,
+    INF_MIN,
+    OTSClient,
+    OTSServiceError,
+    Condition,
+    Row,
+    RowExistenceExpectation,
+)
 
 from app.config import tenant_keys
 from app.models import InventoryEvent
@@ -113,50 +120,21 @@ def http_handler(event: Any, _context: Any) -> str:
         return _response(200, {"status": result, "event_id": inventory_event.event_id}, _context)
     if method == "GET" and (path.startswith("/inventory/") or _query_value(event, "product_id")):
         product_id = _query_value(event, "product_id") or path.rsplit("/", 1)[-1]
-        _, row, _ = _ots().get_row(os.environ["OTS_TABLE"], [("PK", f"TENANT#{tenant}"), ("SK", f"PRODUCT#{product_id}")], None, None, 1)
-        if row is None:
+        quantity, found = _get_inventory(tenant, product_id)
+        if not found:
             return _response(404, {"detail": "inventory item not found"}, _context)
-        values = dict((name, value) for name, value, *_ in row.attribute_columns)
-        return _response(200, {"tenant_id": tenant, "product_id": product_id, "quantity": int(values.get("quantity", 0))}, _context)
+        return _response(200, {"tenant_id": tenant, "product_id": product_id, "quantity": quantity}, _context)
     return _response(404, {"detail": "not found"}, _context)
 
 
-def _start_inventory_transaction(client: OTSClient, table: str, pk: str) -> str:
-    """Retry brief tenant-partition lock conflicts without replaying writes."""
-    attempts = 5
-    for attempt in range(attempts):
-        try:
-            return client.start_local_transaction(table, [("PK", pk)])
-        except OTSServiceError as exc:
-            if exc.get_error_code() != "OTSRowOperationConflict" or attempt == attempts - 1:
-                raise
-            time.sleep(0.01 * (2 ** attempt))
-    raise RuntimeError("unreachable")
-
-
 def _apply_inventory_event(tenant: str, inventory_event: dict[str, Any]) -> str:
-    """Atomically record and apply an inventory event in one tenant partition."""
+    """Append one idempotent inventory event; this is the only write."""
     event_id = inventory_event["event_id"]
     pk = f"TENANT#{tenant}"
     table = os.environ["OTS_TABLE"]
     client = _ots()
-    transaction_id = _start_inventory_transaction(client, table, pk)
     try:
         event_key = [("PK", pk), ("SK", f"EVENT#{event_id}")]
-        _, existing_event, _ = client.get_row(
-            table,
-            event_key,
-            None,
-            None,
-            1,
-            transaction_id=transaction_id,
-        )
-        if existing_event is not None:
-            # A committed event row and its inventory update are now an
-            # all-or-nothing pair. A retry after an uncertain response is safe.
-            client.commit_transaction(transaction_id)
-            return "duplicate ignored"
-
         client.put_row(
             table,
             Row(
@@ -165,45 +143,65 @@ def _apply_inventory_event(tenant: str, inventory_event: dict[str, Any]) -> str:
                     ("event_id", event_id),
                     ("store_id", inventory_event["store_id"]),
                     ("product_id", inventory_event["product_id"]),
+                    ("event_type", inventory_event["event_type"]),
+                    ("quantity", int(inventory_event["quantity"])),
+                    ("quantity_delta", _event_delta(inventory_event)),
                 ],
             ),
             Condition(RowExistenceExpectation.EXPECT_NOT_EXIST),
-            transaction_id=transaction_id,
         )
-
-        product = inventory_event["product_id"]
-        product_key = [("PK", pk), ("SK", f"PRODUCT#{product}")]
-        _, row, _ = client.get_row(
-            table,
-            product_key,
-            None,
-            None,
-            1,
-            transaction_id=transaction_id,
-        )
-        values = {} if row is None else dict((name, value) for name, value, *_ in row.attribute_columns)
-        delta = -int(inventory_event["quantity"]) if inventory_event["event_type"] == "SALE" else int(inventory_event["quantity"])
-        client.put_row(
-            table,
-            Row(
-                product_key,
-                [
-                    ("quantity", int(values.get("quantity", 0)) + delta),
-                    ("store_id", inventory_event["store_id"]),
-                    ("updated_event_id", event_id),
-                ],
-            ),
-            Condition(RowExistenceExpectation.IGNORE),
-            transaction_id=transaction_id,
-        )
-        client.commit_transaction(transaction_id)
         return "processed"
-    except Exception:
-        # Keep the original storage error visible to the caller. A failed
-        # transaction operation does not end the Tablestore transaction, so
-        # explicitly discard any staged event or inventory writes.
-        try:
-            client.abort_transaction(transaction_id)
-        except Exception:
-            pass
+    except OTSServiceError as exc:
+        if exc.get_error_code() == "OTSConditionCheckFail":
+            return "duplicate ignored"
         raise
+
+
+def _event_delta(inventory_event: dict[str, Any]) -> int:
+    quantity = int(inventory_event["quantity"])
+    return -quantity if inventory_event["event_type"] == "SALE" else quantity
+
+
+def _get_inventory(tenant: str, product_id: str) -> tuple[int, bool]:
+    """Sum append-only events over the legacy quantity as a migration baseline.
+
+    Existing PRODUCT rows are retained as opening balances. Older EVENT rows
+    lack quantity_delta and are ignored because their effects are already
+    included in those balances.
+    """
+    client = _ots()
+    table = os.environ["OTS_TABLE"]
+    pk = f"TENANT#{tenant}"
+    _, base_row, _ = client.get_row(
+        table,
+        [("PK", pk), ("SK", f"PRODUCT#{product_id}")],
+        None,
+        None,
+        1,
+    )
+    base_attributes = {} if base_row is None else {
+        name: value for name, value, *_ in base_row.attribute_columns
+    }
+    quantity = int(base_attributes.get("quantity", 0))
+    found = base_row is not None
+
+    start_key = [("PK", pk), ("SK", INF_MIN)]
+    end_key = [("PK", pk), ("SK", INF_MAX)]
+    while start_key is not None:
+        _, next_start, rows, _ = client.get_range(
+            table,
+            "FORWARD",
+            start_key,
+            end_key,
+            columns_to_get=["product_id", "quantity_delta"],
+            limit=1000,
+        )
+        for row in rows:
+            attributes = {name: value for name, value, *_ in row.attribute_columns}
+            if attributes.get("product_id") != product_id or "quantity_delta" not in attributes:
+                continue
+            quantity += int(attributes["quantity_delta"])
+            found = True
+        start_key = next_start
+
+    return quantity, found

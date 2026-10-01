@@ -1,7 +1,6 @@
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 
 import pytest
 from tablestore import OTSServiceError
@@ -10,61 +9,48 @@ from app import alicloud_handlers
 
 
 class FakeOtsClient:
-    """In-memory Tablestore substitute with atomic tenant-partition transactions."""
+    """In-memory Tablestore substitute with atomic conditional row inserts."""
 
     def __init__(self):
         self.rows = {}
         self._lock = threading.RLock()
-        self._transactions = {}
-        self.fail_product_write = False
-        self.lose_next_commit_response = False
-        self.start_conflicts_remaining = 0
-        self.start_calls = 0
-
-    def start_local_transaction(self, _table, _partition_key):
-        self.start_calls += 1
-        if self.start_conflicts_remaining:
-            self.start_conflicts_remaining -= 1
-            raise OTSServiceError(409, "OTSRowOperationConflict", "partition is locked")
-        self._lock.acquire()
-        transaction_id = str(threading.get_ident())
-        self._transactions[transaction_id] = deepcopy(self.rows)
-        return transaction_id
-
-    def commit_transaction(self, transaction_id):
-        self.rows = self._transactions.pop(transaction_id)
-        self._lock.release()
-        if self.lose_next_commit_response:
-            self.lose_next_commit_response = False
-            raise TimeoutError("injected lost commit response")
-
-    def abort_transaction(self, transaction_id):
-        self._transactions.pop(transaction_id)
-        self._lock.release()
+        self.fail_next_event_write = False
+        self.lose_next_event_write_response = False
 
     @staticmethod
     def _pairs(row, field):
         return {name: value for name, value, *_ in getattr(row, field)}
 
-    def put_row(self, _table, row, _condition, transaction_id=None):
+    def put_row(self, _table, row, _condition):
         primary_key = self._pairs(row, "primary_key")
         key = (primary_key["PK"], primary_key["SK"])
-        rows = self._transactions[transaction_id] if transaction_id else self.rows
-        if key[1].startswith("EVENT#") and key in rows:
-            raise OTSServiceError(403, "OTSConditionCheckFail", "duplicate event")
-        if key[1].startswith("PRODUCT#") and self.fail_product_write:
-            self.fail_product_write = False
-            raise RuntimeError("injected product write failure")
-        rows[key] = self._pairs(row, "attribute_columns")
+        with self._lock:
+            if key in self.rows:
+                raise OTSServiceError(403, "OTSConditionCheckFail", "duplicate row")
+            if self.fail_next_event_write:
+                self.fail_next_event_write = False
+                raise RuntimeError("injected event write failure")
+            self.rows[key] = self._pairs(row, "attribute_columns")
+            if self.lose_next_event_write_response:
+                self.lose_next_event_write_response = False
+                raise TimeoutError("injected lost event write response")
 
-    def get_row(self, _table, primary_key, *_args, transaction_id=None):
+    def get_row(self, _table, primary_key, *_args):
         key = tuple(value for _, value in primary_key)
-        rows = self._transactions[transaction_id] if transaction_id else self.rows
-        attributes = rows.get(key)
+        attributes = self.rows.get(key)
         if attributes is None:
             return None, None, None
         row = type("StoredRow", (), {"attribute_columns": [(name, value) for name, value in attributes.items()]})()
         return None, row, None
+
+    def get_range(self, _table, _direction, start_key, _end_key, **_kwargs):
+        partition = dict(start_key)["PK"]
+        rows = []
+        for (pk, sk), attributes in sorted(self.rows.items()):
+            if pk == partition:
+                row = type("StoredRow", (), {"attribute_columns": list(attributes.items())})()
+                rows.append(row)
+        return None, None, rows, None
 
 
 @pytest.fixture()
@@ -77,7 +63,7 @@ def handler(monkeypatch):
 
 
 @pytest.fixture()
-def transactional_client(monkeypatch):
+def ots_client(monkeypatch):
     client = FakeOtsClient()
     monkeypatch.setenv("TENANT_KEYS", '{"key-a":"tenant-a","key-b":"tenant-b"}')
     monkeypatch.setenv("OTS_TABLE", "inventory")
@@ -119,53 +105,41 @@ def test_duplicate_event_is_idempotent(handler):
     assert inventory["quantity"] == 5
 
 
-def test_failed_inventory_write_aborts_event_record_and_retry_applies_once(transactional_client):
-    transactional_client.fail_product_write = True
+def test_failed_event_write_leaves_no_partial_inventory_change_and_can_retry(ots_client):
+    ots_client.fail_next_event_write = True
     payload = event("retry-after-failure")
 
-    with pytest.raises(RuntimeError, match="injected product write failure"):
+    with pytest.raises(RuntimeError, match="injected event write failure"):
         alicloud_handlers._apply_inventory_event("tenant-a", payload)
 
-    assert transactional_client.rows == {}
+    assert ots_client.rows == {}
     assert alicloud_handlers._apply_inventory_event("tenant-a", payload) == "processed"
     assert alicloud_handlers._apply_inventory_event("tenant-a", payload) == "duplicate ignored"
-    product = transactional_client.rows[("TENANT#tenant-a", "PRODUCT#sku-1")]
-    assert product["quantity"] == 5
+    assert alicloud_handlers._get_inventory("tenant-a", "sku-1") == (5, True)
 
 
-def test_retry_after_lost_commit_response_does_not_apply_twice(transactional_client):
-    transactional_client.lose_next_commit_response = True
+def test_retry_after_lost_write_response_does_not_apply_twice(ots_client):
+    ots_client.lose_next_event_write_response = True
     payload = event("commit-response-lost")
 
-    with pytest.raises(TimeoutError, match="injected lost commit response"):
+    with pytest.raises(TimeoutError, match="injected lost event write response"):
         alicloud_handlers._apply_inventory_event("tenant-a", payload)
 
     assert alicloud_handlers._apply_inventory_event("tenant-a", payload) == "duplicate ignored"
-    product = transactional_client.rows[("TENANT#tenant-a", "PRODUCT#sku-1")]
-    assert product["quantity"] == 5
+    assert alicloud_handlers._get_inventory("tenant-a", "sku-1") == (5, True)
 
 
-def test_partition_lock_conflict_retries_before_writing(transactional_client):
-    transactional_client.start_conflicts_remaining = 2
-
-    assert alicloud_handlers._apply_inventory_event("tenant-a", event("after-lock-conflict")) == "processed"
-
-    assert transactional_client.start_calls == 3
-    assert transactional_client.rows[("TENANT#tenant-a", "PRODUCT#sku-1")]["quantity"] == 5
-
-
-def test_concurrent_distinct_events_do_not_lose_inventory_updates(transactional_client):
+def test_concurrent_distinct_events_all_contribute_to_inventory(ots_client):
     payloads = [event(f"concurrent-{index}") for index in range(12)]
 
     with ThreadPoolExecutor(max_workers=12) as pool:
         results = list(pool.map(lambda item: alicloud_handlers._apply_inventory_event("tenant-a", item), payloads))
 
     assert results == ["processed"] * len(payloads)
-    product = transactional_client.rows[("TENANT#tenant-a", "PRODUCT#sku-1")]
-    assert product["quantity"] == 5 * len(payloads)
+    assert alicloud_handlers._get_inventory("tenant-a", "sku-1") == (5 * len(payloads), True)
 
 
-def test_concurrent_duplicate_event_is_applied_once(transactional_client):
+def test_concurrent_duplicate_event_is_applied_once(ots_client):
     payloads = [event("same-concurrent-event") for _ in range(8)]
 
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -173,8 +147,19 @@ def test_concurrent_duplicate_event_is_applied_once(transactional_client):
 
     assert results.count("processed") == 1
     assert results.count("duplicate ignored") == len(payloads) - 1
-    product = transactional_client.rows[("TENANT#tenant-a", "PRODUCT#sku-1")]
-    assert product["quantity"] == 5
+    assert alicloud_handlers._get_inventory("tenant-a", "sku-1") == (5, True)
+
+
+def test_event_ledger_adds_to_legacy_product_snapshot(ots_client):
+    ots_client.rows[("TENANT#tenant-a", "PRODUCT#sku-1")] = {"quantity": 21}
+    ots_client.rows[("TENANT#tenant-a", "EVENT#old-event")] = {
+        "event_id": "old-event",
+        "product_id": "sku-1",
+    }
+
+    assert alicloud_handlers._apply_inventory_event("tenant-a", event("new-event")) == "processed"
+
+    assert alicloud_handlers._get_inventory("tenant-a", "sku-1") == (26, True)
 
 
 def test_rejects_invalid_api_key(handler):
