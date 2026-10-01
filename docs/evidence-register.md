@@ -4,7 +4,7 @@
 |---|---|---|---|
 | E1 | Public deployed platform | Function Compute public endpoint and browser console screenshot | Complete |
 | E2 | Tenant isolation | Tenant A reads stock and tenant B receives not found for the same SKU | Pending capture |
-| E3 | Idempotency | Repeated event ID returns `duplicate ignored` and quantity remains unchanged | Pending capture |
+| E3 | Event-ledger integrity | New events change derived quantity; replayed event IDs are ignored; concurrent distinct events all contribute | Pending live API capture |
 | E4 | Infrastructure as Code | Terraform `main.tf` and successful GitHub Actions deployment | Complete |
 | E5 | CI/CD | Latest green Actions run showing test, package and Terraform apply | Complete |
 | E6 | Managed persistence | Tablestore instance/table console screenshot | Pending capture |
