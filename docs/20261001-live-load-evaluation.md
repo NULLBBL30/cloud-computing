@@ -12,7 +12,7 @@ The event-ledger deployment was tested at the public Function Compute endpoint a
 
 Failures were HTTP 502 responses and concentrated in `GET /inventory/{product_id}`. POST event writes remained almost entirely successful through 100 users. The observed trend is consistent with the append-only read path scanning an increasingly large tenant partition: GET latency and failures rose while writes stayed fast. This is the first measured degradation point for the current event volume; the 100- and 150-user results are short, stopped samples and are not comparable to complete 10-minute runs.
 
-The 150-user sample was stopped as soon as the GET failure rate exceeded 80%. A subsequent `/health` check returned HTTP 200. This confirms recovery of the health path after load, but it does not verify that inventory reads fully recovered.
+The 150-user sample was stopped as soon as the GET failure rate exceeded 80%. After load ended, `/health` returned HTTP 200 and a read of `load-sku-001` returned HTTP 200 with quantity `62809`. This confirms both health and inventory reads recovered after load.
 
 Raw Locust CSV and run metadata are in `data/raw/load/20261001-164212-{idle,low,target,high,stress-sentinel}/`. The 100-user and 150-user metadata record their early-stop reasons. `data/derived/load-summary.csv` contains the corresponding endpoint summaries plus the existing historical runs.
 
