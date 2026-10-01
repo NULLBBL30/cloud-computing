@@ -112,8 +112,9 @@ resource "alicloud_fc_trigger" "api_http" {
   config = jsonencode({ authType = "anonymous", methods = ["GET", "POST", "OPTIONS"] })
 }
 
-data "alicloud_cms_alarm_contact_groups" "default" {
-  name_regex = "^Default Contact Group$"
+resource "alicloud_cms_alarm_contact_group" "platform" {
+  alarm_contact_group_name = "inventory-platform-alerts"
+  describe                 = "Cloud Monitor alerts for the inventory platform"
 }
 
 resource "alicloud_cms_alarm" "api_http_5xx" {
@@ -121,11 +122,11 @@ resource "alicloud_cms_alarm" "api_http_5xx" {
   project        = "acs_fc"
   metric         = "FunctionHTTPStatus5xx"
   period         = 60
-  contact_groups = data.alicloud_cms_alarm_contact_groups.default.names
+  contact_groups = [alicloud_cms_alarm_contact_group.platform.alarm_contact_group_name]
   metric_dimensions = jsonencode([{
     region       = var.region
     serviceName  = alicloud_fc_service.platform.name
-    functionName = "${alicloud_fc_service.platform.name}$${alicloud_fc_function.api.name}"
+    functionName = format("%s$%s", alicloud_fc_service.platform.name, alicloud_fc_function.api.name)
   }])
   escalations_critical {
     statistics          = "Average"
