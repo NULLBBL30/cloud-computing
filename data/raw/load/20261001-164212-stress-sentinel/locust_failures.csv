@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,GET /inventory/{product_id},HTTPError('502 Server Error: Bad Gateway for url: GET /inventory/{product_id}'),470,2026-10-01T09:14:26Z,2026-10-01T09:15:00Z

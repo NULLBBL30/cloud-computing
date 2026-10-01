@@ -1,0 +1,14 @@
+{
+  "run_id": "20261001-164212-high",
+  "previous_profile_failures": "50-user target profile recorded 5 HTTP 502 responses",
+  "duration_minutes": 10,
+  "commit": "98d363f5740cf12541a316ab4792084e1868d10c",
+  "users": 100,
+  "region": "cn-hangzhou",
+  "base_url": "https://inventory-api-inventoplatform-mazoofjdvh.cn-hangzhou.fcapp.run",
+  "timestamp_utc": "2026-10-01T09:03:48.9706255Z",
+  "profile": "high",
+  "stopped_early": true,
+  "actual_duration_seconds": 552,
+  "stop_reason": "Stopped after GET 502 failure rate reached 9.15%; service returned healthy after load ended."
+}

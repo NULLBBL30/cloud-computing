@@ -1,0 +1,15 @@
+{
+  "timestamp_utc": "2026-10-01T09:14:21.5748075Z",
+  "planned_profile_minutes": 10,
+  "users": 150,
+  "duration_minutes": 1,
+  "commit": "98d363f5740cf12541a316ab4792084e1868d10c",
+  "base_url": "https://inventory-api-inventoplatform-mazoofjdvh.cn-hangzhou.fcapp.run",
+  "profile": "stress-sentinel",
+  "region": "cn-hangzhou",
+  "run_id": "20261001-164212-stress-sentinel",
+  "reason": "Fifth load level; one-minute sentinel after 100-user GET failure rate exceeded 9 percent.",
+  "stopped_early": true,
+  "actual_duration_seconds": 45,
+  "stop_reason": "Stopped immediately when 87.62 percent of GET requests returned HTTP 502."
+}
