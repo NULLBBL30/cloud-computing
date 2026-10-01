@@ -2,6 +2,7 @@
 import base64
 import json
 import os
+import time
 from typing import Any
 from urllib.parse import parse_qs
 
@@ -120,24 +121,89 @@ def http_handler(event: Any, _context: Any) -> str:
     return _response(404, {"detail": "not found"}, _context)
 
 
+def _start_inventory_transaction(client: OTSClient, table: str, pk: str) -> str:
+    """Retry brief tenant-partition lock conflicts without replaying writes."""
+    attempts = 5
+    for attempt in range(attempts):
+        try:
+            return client.start_local_transaction(table, [("PK", pk)])
+        except OTSServiceError as exc:
+            if exc.get_error_code() != "OTSRowOperationConflict" or attempt == attempts - 1:
+                raise
+            time.sleep(0.01 * (2 ** attempt))
+    raise RuntimeError("unreachable")
+
+
 def _apply_inventory_event(tenant: str, inventory_event: dict[str, Any]) -> str:
-    """Apply an idempotent inventory event in the request path."""
+    """Atomically record and apply an inventory event in one tenant partition."""
     event_id = inventory_event["event_id"]
     pk = f"TENANT#{tenant}"
     table = os.environ["OTS_TABLE"]
     client = _ots()
+    transaction_id = _start_inventory_transaction(client, table, pk)
     try:
-        client.put_row(table, Row([("PK", pk), ("SK", f"EVENT#{event_id}")], [("event_id", event_id), ("store_id", inventory_event["store_id"])]), Condition(RowExistenceExpectation.EXPECT_NOT_EXIST))
-    except OTSServiceError as exc:
-        # Only a failed EXPECT_NOT_EXIST check denotes a previously accepted
-        # event.  Treating timeouts or permission failures as duplicates would
-        # hide a real data-store outage from callers and monitoring.
-        if exc.get_error_code() == "OTSConditionCheckFail":
+        event_key = [("PK", pk), ("SK", f"EVENT#{event_id}")]
+        _, existing_event, _ = client.get_row(
+            table,
+            event_key,
+            None,
+            None,
+            1,
+            transaction_id=transaction_id,
+        )
+        if existing_event is not None:
+            # A committed event row and its inventory update are now an
+            # all-or-nothing pair. A retry after an uncertain response is safe.
+            client.commit_transaction(transaction_id)
             return "duplicate ignored"
+
+        client.put_row(
+            table,
+            Row(
+                event_key,
+                [
+                    ("event_id", event_id),
+                    ("store_id", inventory_event["store_id"]),
+                    ("product_id", inventory_event["product_id"]),
+                ],
+            ),
+            Condition(RowExistenceExpectation.EXPECT_NOT_EXIST),
+            transaction_id=transaction_id,
+        )
+
+        product = inventory_event["product_id"]
+        product_key = [("PK", pk), ("SK", f"PRODUCT#{product}")]
+        _, row, _ = client.get_row(
+            table,
+            product_key,
+            None,
+            None,
+            1,
+            transaction_id=transaction_id,
+        )
+        values = {} if row is None else dict((name, value) for name, value, *_ in row.attribute_columns)
+        delta = -int(inventory_event["quantity"]) if inventory_event["event_type"] == "SALE" else int(inventory_event["quantity"])
+        client.put_row(
+            table,
+            Row(
+                product_key,
+                [
+                    ("quantity", int(values.get("quantity", 0)) + delta),
+                    ("store_id", inventory_event["store_id"]),
+                    ("updated_event_id", event_id),
+                ],
+            ),
+            Condition(RowExistenceExpectation.IGNORE),
+            transaction_id=transaction_id,
+        )
+        client.commit_transaction(transaction_id)
+        return "processed"
+    except Exception:
+        # Keep the original storage error visible to the caller. A failed
+        # transaction operation does not end the Tablestore transaction, so
+        # explicitly discard any staged event or inventory writes.
+        try:
+            client.abort_transaction(transaction_id)
+        except Exception:
+            pass
         raise
-    product = inventory_event["product_id"]
-    delta = -int(inventory_event["quantity"]) if inventory_event["event_type"] == "SALE" else int(inventory_event["quantity"])
-    _, row, _ = client.get_row(table, [("PK", pk), ("SK", f"PRODUCT#{product}")], None, None, 1)
-    values = {} if row is None else dict((name, value) for name, value, *_ in row.attribute_columns)
-    client.put_row(table, Row([("PK", pk), ("SK", f"PRODUCT#{product}")], [("quantity", int(values.get("quantity", 0)) + delta), ("store_id", inventory_event["store_id"]), ("updated_event_id", event_id)]), Condition(RowExistenceExpectation.IGNORE))
-    return "processed"

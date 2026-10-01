@@ -23,6 +23,10 @@ Run `python -m pytest -q` to verify the same isolation, idempotency, API-key rej
 
 Run `./scripts/run-evaluation.ps1 -BaseUrl <fc-http-trigger-url>` and retain raw results in `data/raw/`. Use the five-level load, scaling and fault protocol in `docs/evaluation-plan.md` against the deployed endpoint.
 
+### Tablestore transaction prerequisite
+
+Inventory event writes use a Tablestore local transaction so the event deduplication row and inventory row commit or abort together. The `inventory` table must have local transactions enabled before deploying this version. Tablestore local transactions are not enabled by default and may require Alibaba Cloud to enable the feature for the account/table; confirm this before running CI/CD or evaluation. The current Terraform provider resource does not configure this table feature. If local transactions are unavailable, do not claim the event update is atomic or use this implementation for evaluation.
+
 ## Submission documents
 
 - `docs/proposal.md`

@@ -4,6 +4,8 @@
 
 Keep the Function Compute HTTP trigger public only for the assessment period. The application still requires `x-api-key` for inventory reads and writes. Use only the demo keys in the browser console. Keep Alibaba Cloud access keys only in GitHub repository secrets.
 
+Before deploying the transactional event handler, confirm that local transactions are enabled for the `inventory` Tablestore table. This capability is disabled by default and may require Alibaba Cloud support to enable it. The current Terraform configuration does not enable it. If the capability is unavailable, stop before evaluation rather than silently falling back to the previous non-atomic read-modify-write flow.
+
 ## Log evidence
 
 In the Alibaba Cloud console, open Function Compute, select `inventory-platform` and `inventory-api`, then open the Logs tab. During a successful submission, retain a screenshot with the function name, timestamp and successful invocation. During the controlled dependency test, retain the matching error log screenshot.
