@@ -112,28 +112,4 @@ resource "alicloud_fc_trigger" "api_http" {
   config = jsonencode({ authType = "anonymous", methods = ["GET", "POST", "OPTIONS"] })
 }
 
-resource "alicloud_cms_alarm_contact_group" "platform" {
-  alarm_contact_group_name = "inventory-platform-alerts"
-  describe                 = "Cloud Monitor alerts for the inventory platform"
-}
-
-resource "alicloud_cms_alarm" "api_http_5xx" {
-  name           = "inventory-api-http-5xx"
-  project        = "acs_fc"
-  metric         = "FunctionHTTPStatus5xx"
-  period         = 60
-  contact_groups = [alicloud_cms_alarm_contact_group.platform.alarm_contact_group_name]
-  metric_dimensions = jsonencode([{
-    region       = var.region
-    serviceName  = alicloud_fc_service.platform.name
-    functionName = format("%s$%s", alicloud_fc_service.platform.name, alicloud_fc_function.api.name)
-  }])
-  escalations_critical {
-    statistics          = "Average"
-    comparison_operator = ">="
-    threshold           = 1
-    times               = 1
-  }
-}
-
 output "deploy_note" { value = "Retrieve the FC HTTP trigger URL from the FC console after apply." }
