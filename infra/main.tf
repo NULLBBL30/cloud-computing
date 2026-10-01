@@ -128,9 +128,9 @@ resource "alicloud_cms_alarm" "api_http_5xx" {
     functionName = "${alicloud_fc_service.platform.name}$${alicloud_fc_function.api.name}"
   }])
   escalations_critical {
-    statistics          = "Sum"
-    comparison_operator = ">"
-    threshold           = 0
+    statistics          = "Average"
+    comparison_operator = ">="
+    threshold           = 1
     times               = 1
   }
 }
