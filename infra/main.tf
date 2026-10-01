@@ -111,4 +111,28 @@ resource "alicloud_fc_trigger" "api_http" {
   type = "http"
   config = jsonencode({ authType = "anonymous", methods = ["GET", "POST", "OPTIONS"] })
 }
+
+data "alicloud_cms_alarm_contact_groups" "default" {
+  name_regex = "^Default Contact Group$"
+}
+
+resource "alicloud_cms_alarm" "api_http_5xx" {
+  name           = "inventory-api-http-5xx"
+  project        = "acs_fc"
+  metric         = "FunctionHTTPStatus5xx"
+  period         = 60
+  contact_groups = data.alicloud_cms_alarm_contact_groups.default.names
+  metric_dimensions = jsonencode([{
+    region       = var.region
+    serviceName  = alicloud_fc_service.platform.name
+    functionName = "${alicloud_fc_service.platform.name}$${alicloud_fc_function.api.name}"
+  }])
+  escalations_critical {
+    statistics          = "Sum"
+    comparison_operator = ">"
+    threshold           = 0
+    times               = 1
+  }
+}
+
 output "deploy_note" { value = "Retrieve the FC HTTP trigger URL from the FC console after apply." }

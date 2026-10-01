@@ -1,0 +1,14 @@
+{
+  "verified_at_local": "2026-10-01",
+  "repository_commit": "29d81daeb8cd1277afc8e66e7b08ddc97062ccbe",
+  "workflow_run": "https://github.com/NULLBBL30/cloud-computing/actions/runs/36835125781",
+  "endpoint": "https://inventory-api-inventoplatform-mazoofjdvh.cn-hangzhou.fcapp.run",
+  "checks": {
+    "health": { "status": "ok", "provider": "alicloud" },
+    "first_event": { "event_id": "smoke-ledger-20261001-stock", "status": "processed" },
+    "quantity_after_first_event": 7,
+    "duplicate_replay": "duplicate ignored",
+    "quantity_after_replay": 7,
+    "same_product_from_tenant_b": 404
+  }
+}
